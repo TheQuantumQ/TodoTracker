@@ -95,11 +95,26 @@ let UserResolver = class UserResolver {
                 username: options.username,
                 password: hashedPassword,
             });
-            yield fork.persistAndFlush(user);
+            try {
+                yield fork.persistAndFlush(user);
+            }
+            catch (err) {
+                if (err.code === "23505") {
+                    return {
+                        errors: [
+                            {
+                                field: "username",
+                                message: "username already exists",
+                            },
+                        ],
+                    };
+                }
+                console.log("Message: ", err.message);
+            }
             return { user };
         });
     }
-    login(options, { fork }) {
+    login(options, { fork, req }) {
         return __awaiter(this, void 0, void 0, function* () {
             const user = yield fork.findOne(User_1.User, { username: options.username });
             if (!user) {
@@ -123,6 +138,7 @@ let UserResolver = class UserResolver {
                     ],
                 };
             }
+            req.session.userId = user.id;
             return { user };
         });
     }
