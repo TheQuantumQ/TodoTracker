@@ -37,6 +37,12 @@ class UserResponse {
   user?: User;
 }
 
+declare module "express-session" {
+  export interface SessionData {
+    userId: number;
+  }
+}
+
 @Resolver()
 export class UserResolver {
   @Mutation(() => UserResponse)
@@ -70,14 +76,28 @@ export class UserResolver {
       username: options.username,
       password: hashedPassword,
     } as User);
-    await fork.persistAndFlush(user);
+    try {
+      await fork.persistAndFlush(user);
+    } catch (err) {
+      if (err.code === "23505") {
+        return {
+          errors: [
+            {
+              field: "username",
+              message: "username already exists",
+            },
+          ],
+        };
+      }
+      console.log("Message: ", err.message);
+    }
     return { user };
   }
 
   @Mutation(() => UserResponse)
   async login(
     @Arg("options") options: UsernamePasswordInput,
-    @Ctx() { fork }: MyContext
+    @Ctx() { fork, req }: MyContext
   ): Promise<UserResponse> {
     const user = await fork.findOne(User, { username: options.username });
     if (!user) {
@@ -101,6 +121,8 @@ export class UserResolver {
         ],
       };
     }
+
+    req.session.userId = user.id;
 
     return { user };
   }
